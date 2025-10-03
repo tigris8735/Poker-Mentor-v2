@@ -1,0 +1,17 @@
+# Telegram бот
+python-telegram-bot==20.7
+
+# База данных
+sqlalchemy==2.0.23
+alembic==1.12.1
+
+# Сервер (Flask вместо FastAPI - проще для новичка)
+flask==2.3.3
+flask-cors==4.0.0
+flask-sqlalchemy==3.0.5
+
+# Дополнительные утилиты
+requests==2.31.0
+python-dotenv==1.0.0
+python-jose==3.3.0
+

@@ -1,0 +1,9 @@
+# Конфигурация Poker Mentor Bot
+TELEGRAM_BOT_TOKEN=8323676065:AAHBKbwyjpTPQjE7v9aRIElmSOk1A7uHtjY
+
+# Настройки базы данных
+DATABASE_URL=sqlite:///poker_mentor.db
+
+# Настройки игры
+DEFAULT_STAKE=1/2
+DEFAULT_GAME_TYPE=cash
