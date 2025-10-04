@@ -66,6 +66,9 @@ class PokerMentorBot:
         # Обработчики кнопок и сообщений
         self.application.add_handler(CallbackQueryHandler(self._handle_callback_query))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_text_message))
+
+        self.application.add_handler(CommandHandler("profile", self._handle_profile))
+        self.application.add_handler(CommandHandler("learning", self._handle_learning))
     
     # ===== ОСНОВНЫЕ ОБРАБОТЧИКИ =====
     
@@ -439,12 +442,68 @@ class PokerMentorBot:
             elif callback_data.startswith("position_"):
                 await self._handle_position_selection(query, callback_data[9:])
             
+            elif callback_data.startswith("settings_"):
+                await self._handle_settings(query, callback_data[9:])
+
+            elif callback_data.startswith("set_"):
+                await self._handle_setting_change(query, callback_data[4:])
+            
+            elif callback_data.startswith("profile_"):
+                await self._handle_profile_callback(query, callback_data[8:])
+
+            elif callback_data.startswith("learn_") or callback_data.startswith("lesson_"):
+                await self._handle_learning_callback(query, callback_data)
+
             else:
                 await query.edit_message_text("❌ Неизвестная команда")
 
         except Exception as e:
             logger.error(f"Ошибка в callback: {e}")
             await update.callback_query.edit_message_text("❌ Произошла ошибка. Попробуйте снова.")
+
+
+    async def _handle_profile_callback(self, query, action: str):
+        """Обработчик callback профиля"""
+        if action == "level":
+            await query.edit_message_text(
+                "🎓 **Выберите ваш уровень навыков:**",
+                reply_markup=ProfileMenus.get_level_selection_menu()
+            )
+        elif action.startswith("set_level_"):
+            level = action[10:]
+            level_names = {
+                "beginner": "Новичок",
+                "intermediate": "Любитель", 
+                "advanced": "Продвинутый"
+            }
+            await query.edit_message_text(f"✅ Уровень установлен: {level_names.get(level, level)}")
+        elif action == "back":
+            await self._handle_profile(query, query.message.chat_id)
+
+    async def _handle_learning_callback(self, query, lesson: str):
+        """Обработчик обучения"""
+        if lesson == "learn_basics":
+            await query.edit_message_text(
+                "🎯 **Основы покера**\n\nВыберите тему:",
+                reply_markup=LearningMenus.get_lesson_menu("basics")
+            )
+        elif lesson == "lesson_basics_rules":
+            await query.edit_message_text(
+                "📖 **Основные правила Техасского Холдема:**\n\n"
+                "• Играется колодой из 52 карт\n"
+                "• Каждый игрок получает 2 карты\n"
+                "• На стол выкладывается 5 общих карт\n"
+                "• Цель - собрать лучшую комбинацию из 5 карт\n"
+                "• Ставки делаются в 4 раунда: префлоп, флоп, терн, ривер\n\n"
+                "💡 _Используйте свои 2 карты + 5 общих для составления комбинации_"
+            )
+        elif lesson == "learning_back":
+            await query.edit_message_text(
+                "📚 **Poker Mentor - Обучение**\n\nВыберите раздел:",
+                reply_markup=LearningMenus.get_learning_menu()
+            )
+        else:
+            await query.edit_message_text("📚 Урок в разработке...")
 
     async def _handle_text_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик текстовых сообщений с улучшенной обработкой ошибок"""
@@ -456,8 +515,15 @@ class PokerMentorBot:
             if hasattr(self, 'waiting_for_cards') and self.waiting_for_cards.get("user_id") == user_id:
                 await self._process_hand_input(update, text)
                 return
-
-        # Обрабатываем кнопки главного меню
+            elif text == "⚙️ Настроить игру":
+                await self._handle_settings_menu(update, context)
+            elif text == "📈 Моя статистика":
+                await self._handle_stats(update, context)
+            elif text == "👤 Мой профиль":
+                await self._handle_profile(update, context)
+            elif text == "📚 Обучение":
+                await self._handle_learning(update, context)
+                # Обрабатываем кнопки главного меню
             menu_actions = {
                 "🎮 Быстрая игра": self._handle_test_game,
                 "📊 Анализ руки": self._handle_analyze,
@@ -566,7 +632,78 @@ class PokerMentorBot:
     
         await update.message.reply_text(text, parse_mode='Markdown')
 
-        
+    async def _handle_settings_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик меню настроек"""
+        await update.message.reply_text(
+            "⚙️ **Настройки игры**\n\n"
+            "Выберите параметр для настройки:",
+            reply_markup=SettingsMenus.get_settings_menu()
+        )
+
+    async def _handle_settings(self, query, setting_type: str):
+        """Обработчик настроек"""
+        if setting_type == "ai":
+            await query.edit_message_text(
+                "🤖 **Выберите тип AI оппонента:**",
+                reply_markup=SettingsMenus.get_ai_settings_menu()
+            )
+        elif setting_type == "stakes":
+            await query.edit_message_text(
+                "💰 **Выберите размер ставок:**",
+                reply_markup=SettingsMenus.get_stakes_menu()
+            )
+        elif setting_type == "back":
+            await query.edit_message_text(
+                "⚙️ **Настройки игры**\n\nВыберите параметр для настройки:",
+                reply_markup=SettingsMenus.get_settings_menu()
+            )
+        elif setting_type == "save":
+            await query.edit_message_text("✅ Настройки сохранены!")
+
+    async def _handle_setting_change(self, query, setting: str):
+        """Обработчик изменения настроек"""
+        if setting.startswith("ai_"):
+            ai_type = setting[3:]
+            # Сохраняем настройки AI для пользователя
+            user_id = query.from_user.id
+            # Здесь будет логика сохранения в БД
+            await query.edit_message_text(
+                f"✅ Установлен оппонент: {ai_type.upper()} AI\n\n"
+                f"{GameMenus.get_ai_description(ai_type)}"
+            )
+        elif setting.startswith("stakes_"):
+            stakes = setting[7:].replace('_', '/')
+            await query.edit_message_text(f"✅ Установлены ставки: {stakes} BB")
+
+    async def _handle_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик профиля пользователя"""
+        user_info = db.get_user_info(update.effective_user.id)
+    
+        profile_text = f"""
+        👤 **Ваш профиль**
+
+        🆔 ID: {user_info['id']}
+        🎓 Уровень: {user_info['level'].title()}
+        📅 Зарегистрирован: {user_info['created_at'].strftime('%d.%m.%Y')}
+        🃏 Сыграно рук: {user_info.get('total_hands', 0)}
+
+        💡 Выберите действие:
+        """
+    
+        await update.message.reply_text(
+            profile_text,
+            reply_markup=ProfileMenus.get_profile_menu()
+        )
+
+    async def _handle_learning(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик обучения"""
+        await update.message.reply_text(
+            "📚 **Poker Mentor - Обучение**\n\n"
+            "Выберите раздел для изучения:",
+            reply_markup=LearningMenus.get_learning_menu()
+        )
+
+
 # Точка входа
 if __name__ == "__main__":
     try:
